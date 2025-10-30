@@ -1,36 +1,45 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Configuration status="WARN">
     <Appenders>
+
+        <!-- Консольный вывод -->
         <Console name="Console" target="SYSTEM_OUT">
-            <PatternLayout pattern="%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"/>
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
         </Console>
 
-        <RollingFile name="ApplicationLog" fileName="logs/application.log"
+        <!-- Основной файл логов -->
+        <RollingFile name="ApplicationLog"
+                     fileName="logs/application.log"
                      filePattern="logs/$${date:yyyy-MM}/app-%d{MM-dd-yyyy}-%i.log.gz">
-            <PatternLayout pattern="%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"/>
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5p %c{1.} - %m%n"/>
             <Policies>
                 <TimeBasedTriggeringPolicy />
                 <SizeBasedTriggeringPolicy size="100 MB"/>
             </Policies>
         </RollingFile>
 
-        <RollingFile name="ErrorLog" fileName="logs/errors.log"
+        <!-- Файл для ошибок -->
+        <RollingFile name="ErrorLog"
+                     fileName="logs/errors.log"
                      filePattern="logs/$${date:yyyy-MM}/err-%d{MM-dd-yyyy}-%i.log.gz">
-            <PatternLayout pattern="%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"/>
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5p %c{1.} - %m%n"/>
             <Policies>
                 <TimeBasedTriggeringPolicy />
                 <SizeBasedTriggeringPolicy size="100 MB"/>
             </Policies>
         </RollingFile>
+
     </Appenders>
 
     <Loggers>
-        <Root level="INFO">
+        <!-- Основной корневой логгер -->
+        <Root level="info">
             <AppenderRef ref="Console"/>
             <AppenderRef ref="ApplicationLog"/>
         </Root>
 
-        <Logger name="ErrorLogger" additivity="false" level="ERROR">
+        <!-- Отдельный логгер для ошибок -->
+        <Logger name="ErrorLogger" level="error" additivity="false">
             <AppenderRef ref="ErrorLog"/>
         </Logger>
     </Loggers>

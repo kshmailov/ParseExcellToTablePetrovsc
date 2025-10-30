@@ -168,57 +168,49 @@ public class ParseExcellTable {
     }*/
 
     /**
-     * Парсим таблицу с применением streaming API для эффективного потребления памяти.
+     * Парсинг Excel-файла с использованием XSSFWorkbook (чтение).
      */
     public List<StringTable> parseExcell(String fileName, boolean isNotConsistCspaString) {
         Path path = Paths.get(fileName);
-        log.info("Открываю рабочую книгу {}", fileName);
+        log.info("Открываю рабочую книгу: {}", path.toAbsolutePath());
 
-        try (
-             SXSSFWorkbook workbook = new SXSSFWorkbook(new FileInputStream(fileName))) { // Используем streaming для снижения нагрузки на память
+        try (FileInputStream fis = new FileInputStream(path.toFile());
+             XSSFWorkbook workbook = new XSSFWorkbook(fis)) {
 
             int numberOfSheets = workbook.getNumberOfSheets();
             log.info("Рабочая книга содержит листов: {}", numberOfSheets);
 
             for (int i = 0; i < numberOfSheets; i++) {
-                SXSSFSheet sheet = workbook.getSheetAt(i);
+                Sheet sheet = workbook.getSheetAt(i);
                 log.info("Обрабатываю лист: {}", sheet.getSheetName());
 
                 for (int rowNum = 0; rowNum <= sheet.getLastRowNum(); rowNum++) {
-                    SXSSFRow row = sheet.getRow(rowNum);
+                    Row row = sheet.getRow(rowNum);
+                    if (row == null) continue;
 
-                    if (row == null) {
-                        continue; // Пропускаем пустые строки
-                    }
-
-                    // Проверяем наличие значимой информации в строке
                     Cell firstCell = row.getCell(0);
-                    if (firstCell != null && firstCell.getCellType() == NUMERIC) {
-                        handleRowData(row, sheet, isNotConsistCspaString);
+                    if (firstCell != null && (firstCell.getCellType() == NUMERIC || firstCell.getCellType() == FORMULA)) {
+                        handleRowData(row, sheet, isNotConsistCspaString, workbook);
                     }
                 }
             }
-//        } catch (IOException  e) {
-//            log.error("Ошибка при открытии рабочей книги {}: {}", fileName, e.getMessage(), e);
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
+
+        } catch (IOException e) {
+            log.error("Ошибка при открытии файла {}: {}", fileName, e.getMessage(), e);
+            throw new RuntimeException("Не удалось прочитать Excel файл: " + fileName, e);
         }
 
+        log.info("Обработка завершена. Всего строк: {}", tableStrings.size());
         return tableStrings;
     }
 
     /**
-     * Метод обрабатывает одну строку таблицы и добавляет соответствующие записи в список таблиц.
-     *
-     * @param row              Текущая строка
-     * @param sheet            Лист, содержащий строку
-     * @param isNotConsistCspa Флаг для дополнительной обработки строк
+     * Обработка одной строки Excel.
      */
-    private void handleRowData(SXSSFRow row, SXSSFSheet sheet, boolean isNotConsistCspa) {
+    private void handleRowData(Row row, Sheet sheet, boolean isNotConsistCspa, Workbook workbook) {
         StringTable currentTable = new StringTable();
         currentTable.setId(this.idString++);
 
-        // Заполняем данные таблицы
         currentTable.setShm(getCellValueAsString(row.getCell(2)));
         currentTable.setTs(getCellValueAsString(row.getCell(3)).equals("[Не задан]") ? "" : getCellValueAsString(row.getCell(3)));
         currentTable.setFormula(getCellValueAsString(row.getCell(4)));
@@ -227,84 +219,78 @@ public class ParseExcellTable {
         currentTable.setSign(getCellValueAsString(row.getCell(8)));
         currentTable.setKpr(getCellValueAsString(row.getCell(9)).equals("[Не задан]") ? "" : getCellValueAsString(row.getCell(9)));
 
-        // Проверяем специфичные условия для добавления записей UV
+        // Обработка UV
         Cell uvCell = row.getCell(10);
         if (uvCell != null && (uvCell.getCellType() == NUMERIC || uvCell.getCellType() == FORMULA)) {
-            addUVToTable(currentTable, uvCell);
+            addUVToTable(currentTable, uvCell, workbook);
         }
 
-        // Добавляем запись в общий список
         tableStrings.add(currentTable);
 
-        // Дополнительная обработка строк для случая отсутствия CSPA
         if (isNotConsistCspa) {
             createCspaString(currentTable);
         }
     }
 
     /**
-     * Возвращает значение ячейки как строку.
-     *
-     * @param cell Ячейка, значение которой нужно преобразовать
-     * @return Строковое представление значения ячейки
+     * Преобразует значение ячейки в строку.
      */
     private String getCellValueAsString(Cell cell) {
-        if (cell == null) {
-            return "";
-        }
-        switch (cell.getCellType()) {
-            case STRING:
-                return cell.getRichStringCellValue().toString();
-            case NUMERIC:
-                return Double.toString(cell.getNumericCellValue());
-            default:
-                return "";
-        }
+        if (cell == null) return "";
+        return switch (cell.getCellType()) {
+            case STRING -> cell.getStringCellValue();
+            case NUMERIC -> String.valueOf((int) cell.getNumericCellValue());
+            case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
+            case FORMULA -> cell.getCellFormula();
+            default -> "";
+        };
     }
 
     /**
-     * Добавляет UV-значение в объект StringTable.
-     *
-     * @param table Таблица, куда добавляется UV
-     * @param uvCell Ячейка, содержащая UV-значение
+     * Добавляет UV-значение в StringTable.
      */
-    private void addUVToTable(StringTable table, Cell uvCell) {
+    private void addUVToTable(StringTable table, Cell uvCell, Workbook workbook) {
+        int uvNumber;
+        if (uvCell.getCellType() == NUMERIC) {
+            uvNumber = (int) uvCell.getNumericCellValue();
+        } else {
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            CellValue evaluated = evaluator.evaluate(uvCell);
+            uvNumber = (int) evaluated.getNumberValue();
+        }
+
         StringBuilder builder = new StringBuilder();
-        double numericValue = uvCell.getNumericCellValue();
-        int uvNumber = (int) Math.round(numericValue);
         builder.append("s").append(uvNumber).append("=");
 
         Cell uvTextCell = uvCell.getRow().getCell(11);
         if (uvTextCell != null && uvTextCell.getCellType() == STRING) {
-            String[] uvValues = uvTextCell.getStringCellValue().split(";");
-            for (int i = 0; i < uvValues.length; i++) {
-                if (i > 0) {
-                    builder.append(" ");
-                }
-                builder.append(uvValues[i].trim());
+            String[] uvParts = uvTextCell.getStringCellValue().split(";");
+            for (int i = 0; i < uvParts.length; i++) {
+                if (i > 0) builder.append(" ");
+                builder.append(uvParts[i].trim());
             }
         }
+
         table.addUv(builder.toString());
     }
 
     /**
-     * Создание дополнительной строки для учета CPSA-кодов.
-     *
-     * @param originalTable Исходная таблица
+     * Создаёт дополнительную строку для CSPA.
      */
     private void createCspaString(StringTable originalTable) {
-        StringTable additionalTable = new StringTable();
-        additionalTable.setId(this.idString++);
-        additionalTable.setShm(originalTable.getShm());
-        additionalTable.setTs(originalTable.getTs());
-        additionalTable.setFormula(originalTable.getFormula());
-        additionalTable.setPo(originalTable.getPo());
-        additionalTable.setSlice(originalTable.getSlice());
-        additionalTable.setSign(originalTable.getSign());
-        additionalTable.setKpr("*ФСч");
-        additionalTable.addUv("s1=*ОН_ЛАПНУ");
-        tableStrings.add(additionalTable);
-        log.info("Добавлена дополнительная строка для учёта CPSA-кода: {}", additionalTable);
+        StringTable additional = new StringTable();
+        additional.setId(this.idString++);
+        additional.setShm(originalTable.getShm());
+        additional.setTs(originalTable.getTs());
+        additional.setFormula(originalTable.getFormula());
+        additional.setPo(originalTable.getPo());
+        additional.setSlice(originalTable.getSlice());
+        additional.setSign(originalTable.getSign());
+        additional.setKpr("*ФСч");
+        additional.addUv("s1=*ОН_ЛАПНУ");
+
+        tableStrings.add(additional);
+        log.info("Добавлена строка CSPA: {}", additional);
     }
 
 }
