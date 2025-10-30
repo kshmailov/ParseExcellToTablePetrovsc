@@ -47,18 +47,24 @@ public class ParseExcellTable {
             int numberOfSheets = workbook.getNumberOfSheets();
             log.info("Рабочая книга содержит {} лист(ов)", numberOfSheets);
 
-            for (int i = 0; i < numberOfSheets; i++) {
+            for (int i = 0; i <= numberOfSheets; i++) {
                 Sheet sheet = workbook.getSheetAt(i);
                 log.info("Обрабатываю лист: {}", sheet.getSheetName());
-
-                for (int rowNum = 0; rowNum <= sheet.getLastRowNum(); rowNum++) {
+                int rowNum =0;
+                while (rowNum<sheet.getLastRowNum()) {
                     Row row = sheet.getRow(rowNum);
-                    if (row == null) continue;
+                    if (row == null){
+                        rowNum++;
+                        continue;
+                    }
 
                     Cell firstCell = row.getCell(0);
                     if (firstCell != null && (firstCell.getCellType() == NUMERIC||firstCell.getCellType() == FORMULA)) {
-                        handleRowData(row, sheet, isNotConsistCspaString);
-                    }
+                        int endMergedRow = getMergedRegionEndRow(sheet,rowNum);
+                        rowNum=endMergedRow+1;
+                        handleRowData(row, sheet,endMergedRow, isNotConsistCspaString);
+                    }else rowNum++;
+
                 }
             }
 
@@ -72,7 +78,7 @@ public class ParseExcellTable {
     /**
      * Обработка строки с данными таблицы.
      */
-    private void handleRowData(Row row, Sheet sheet, boolean isNotConsistCspa) {
+    private void handleRowData(Row row, Sheet sheet, int endUvRow, boolean isNotConsistCspa) {
         StringTable currentTable = new StringTable();
         currentTable.setId(this.idString++);
         currentTable.setShm(getCellValueAsString(row.getCell(2)));
@@ -85,12 +91,12 @@ public class ParseExcellTable {
 
         // определяем границы объединения (по первой колонке)
         int startUvRow = row.getRowNum() + 1;
-        int endUvRow = getMergedRegionEndRow(sheet, row.getRowNum(), 0);
+
 
         int colStepNumber = 10; // номер ступени
         int colUvList = 11;     // список УВ
 
-        tableUv(sheet, startUvRow, endUvRow, colStepNumber, colUvList, currentTable);
+        if(startUvRow!=endUvRow) tableUv(sheet, startUvRow, endUvRow, colStepNumber, colUvList, currentTable);
 
         // добавляем итоговую строку
         tableStrings.add(currentTable);
@@ -106,28 +112,29 @@ public class ParseExcellTable {
      * — добавляет все найденные УВ в одну запись StringTable
      */
     private void tableUv(Sheet sheet, int startRow, int endRow, int colStepNumber, int colUvList, StringTable table) {
-        for (int rowNum = startRow; rowNum <= endRow && rowNum <= sheet.getLastRowNum(); rowNum++) {
+        for (int rowNum = startRow; rowNum <= endRow; rowNum++) {
             Row row = sheet.getRow(rowNum);
             if (row == null) continue;
 
             Cell stepCell = row.getCell(colStepNumber);
             Cell uvCell = row.getCell(colUvList);
 
-            if ((stepCell == null || getCellValueAsString(stepCell).trim().isEmpty()) &&
-                    (uvCell == null || getCellValueAsString(uvCell).trim().isEmpty())) {
-                continue;
-            }
-
             String stepVal = getCellValueAsString(stepCell).trim();
             String uvVal = getCellValueAsString(uvCell).trim();
 
-            if (stepVal.isEmpty() || uvVal.isEmpty() || "-".equals(stepVal) || "-".equals(uvVal)) {
-                continue;
-            }
+            if (stepCell == null || stepVal.isEmpty() ||
+                    uvCell == null || uvVal.isEmpty()|| "-".equals(stepVal)
+                    || "-".equals(uvVal)) break;
 
-            String uvString = "s" + stepVal + "=" + uvVal;
-            table.addUv(uvString);
-            log.debug("Добавлено УВ: {}", uvString);
+            String[] uvString = uvVal.split(";");
+            StringBuilder uvBuilder = new StringBuilder();
+            uvBuilder.append("s").append("=");
+            for (int i=0; i<uvString.length;i++){
+                if (i>0) uvBuilder.append(" ");
+                uvBuilder.append(uvString[i].trim());
+            }
+            table.addUv(uvBuilder.toString());
+            log.debug("Добавлено УВ: {}", uvBuilder);
         }
     }
 
@@ -135,10 +142,10 @@ public class ParseExcellTable {
      * Определяет последнюю строку объединения для заданной ячейки.
      * Если ячейка не объединена — возвращает тот же индекс строки.
      */
-    private int getMergedRegionEndRow(Sheet sheet, int rowIndex, int colIndex) {
+    private int getMergedRegionEndRow(Sheet sheet, int rowIndex) {
         for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
             CellRangeAddress range = sheet.getMergedRegion(i);
-            if (range.isInRange(rowIndex, colIndex)) {
+            if (range.isInRange(rowIndex, 0)) {
                 return range.getLastRow();
             }
         }
@@ -153,7 +160,6 @@ public class ParseExcellTable {
         return switch (cell.getCellType()) {
             case STRING -> cell.getStringCellValue();
             case NUMERIC -> String.valueOf((int) cell.getNumericCellValue());
-            case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
             case FORMULA -> {
                 try {
                     FormulaEvaluator evaluator = cell.getSheet().getWorkbook().getCreationHelper().createFormulaEvaluator();
@@ -190,7 +196,6 @@ public class ParseExcellTable {
         additionalTable.setSign(originalTable.getSign());
         additionalTable.setKpr("*ФСч");
         additionalTable.addUv("s1=*ОН_ЛАПНУ");
-
         tableStrings.add(additionalTable);
         log.info("Добавлена строка для ЦСПА: {}", additionalTable);
     }
