@@ -39,3 +39,4 @@ build/
 
 ### Логи ###
 /logs/
+/data/out/pau.ini

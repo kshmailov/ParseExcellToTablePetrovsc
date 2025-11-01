@@ -125,8 +125,10 @@ public class ParseExcellTable {
             Cell stepCell = row.getCell(colStepNumber);
             Cell uvCell = row.getCell(colUvList);
 
-            String stepVal = getCellValueAsString(stepCell).strip();
-            String uvVal = getCellValueAsString(uvCell).strip();
+            String regex = "^[\\p{Z}\\s]+|[\\p{Z}\\s]+$";
+
+            String stepVal = getCellValueAsString(stepCell).replaceAll(regex,"");
+            String uvVal = getCellValueAsString(uvCell).replaceAll(regex,"");
 
             if (stepCell == null || stepVal.isEmpty() ||
                     uvCell == null || uvVal.isEmpty()|| "-".equals(stepVal)
@@ -137,7 +139,7 @@ public class ParseExcellTable {
             uvBuilder.append("s").append(stepVal).append("=");
             for (int i=0; i<uvString.length;i++){
                 if (i>0) uvBuilder.append(" ");
-                String uv = uvString[i].strip();
+                String uv = uvString[i].replaceAll(regex,"");
                 uvBuilder.append(uv);
             }
             table.addUv(uvBuilder.toString());
