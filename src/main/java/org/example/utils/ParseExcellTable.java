@@ -47,7 +47,7 @@ public class ParseExcellTable {
             int numberOfSheets = workbook.getNumberOfSheets();
             log.info("Рабочая книга содержит {} лист(ов)", numberOfSheets);
 
-            for (int i = 0; i <= numberOfSheets; i++) {
+            for (int i = 0; i < numberOfSheets; i++) {
                 Sheet sheet = workbook.getSheetAt(i);
                 log.info("Обрабатываю лист: {}", sheet.getSheetName());
                 int rowNum =0;
@@ -128,7 +128,7 @@ public class ParseExcellTable {
 
             String[] uvString = uvVal.split(";");
             StringBuilder uvBuilder = new StringBuilder();
-            uvBuilder.append("s").append("=");
+            uvBuilder.append("s").append(stepVal).append("=");
             for (int i=0; i<uvString.length;i++){
                 if (i>0) uvBuilder.append(" ");
                 uvBuilder.append(uvString[i].trim());
@@ -143,13 +143,14 @@ public class ParseExcellTable {
      * Если ячейка не объединена — возвращает тот же индекс строки.
      */
     private int getMergedRegionEndRow(Sheet sheet, int rowIndex) {
-        for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
-            CellRangeAddress range = sheet.getMergedRegion(i);
-            if (range.isInRange(rowIndex, 0)) {
-                return range.getLastRow();
-            }
+        if (rowIndex==sheet.getLastRowNum()) return rowIndex;
+        int endRow =rowIndex;
+        for (int i = endRow+1; i < sheet.getLastRowNum(); i++) {
+            CellType cellType = sheet.getRow(i).getCell(0).getCellType();
+            if (cellType==NUMERIC||cellType==FORMULA)return i-1;
+            endRow++;
         }
-        return rowIndex; // не объединена
+        return endRow; // не объединена
     }
 
     /**
