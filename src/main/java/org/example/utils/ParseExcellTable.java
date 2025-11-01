@@ -86,7 +86,12 @@ public class ParseExcellTable {
         currentTable.setFormula(getCellValueAsString(row.getCell(4)));
         currentTable.setPo(getCellValueAsString(row.getCell(5)));
         currentTable.setSlice(getCellValueAsString(row.getCell(7)));
-        currentTable.setSign(getCellValueAsString(row.getCell(8)));
+        String sign = switch (getCellValueAsString(row.getCell(8))){
+            case "+" -> "0";
+            case "-" -> "1";
+            default -> "";
+        };
+        currentTable.setSign(sign);
         currentTable.setKpr(normalizeValue(row.getCell(9)));
 
         // определяем границы объединения (по первой колонке)
@@ -120,8 +125,8 @@ public class ParseExcellTable {
             Cell stepCell = row.getCell(colStepNumber);
             Cell uvCell = row.getCell(colUvList);
 
-            String stepVal = getCellValueAsString(stepCell).trim();
-            String uvVal = getCellValueAsString(uvCell).trim();
+            String stepVal = getCellValueAsString(stepCell).strip();
+            String uvVal = getCellValueAsString(uvCell).strip();
 
             if (stepCell == null || stepVal.isEmpty() ||
                     uvCell == null || uvVal.isEmpty()|| "-".equals(stepVal)
@@ -132,7 +137,8 @@ public class ParseExcellTable {
             uvBuilder.append("s").append(stepVal).append("=");
             for (int i=0; i<uvString.length;i++){
                 if (i>0) uvBuilder.append(" ");
-                uvBuilder.append(uvString[i].trim());
+                String uv = uvString[i].strip();
+                uvBuilder.append(uv);
             }
             table.addUv(uvBuilder.toString());
             log.debug("Добавлено УВ: {}", uvBuilder);
