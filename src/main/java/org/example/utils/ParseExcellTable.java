@@ -51,7 +51,7 @@ public class ParseExcellTable {
                 Sheet sheet = workbook.getSheetAt(i);
                 log.info("Обрабатываю лист: {}", sheet.getSheetName());
                 int rowNum =0;
-                while (rowNum<sheet.getLastRowNum()) {
+                while (rowNum<=sheet.getLastRowNum()) {
                     Row row = sheet.getRow(rowNum);
                     if (row == null){
                         rowNum++;
@@ -90,13 +90,14 @@ public class ParseExcellTable {
         currentTable.setKpr(normalizeValue(row.getCell(9)));
 
         // определяем границы объединения (по первой колонке)
-        int startUvRow = row.getRowNum() + 1;
+        int startRow =row.getRowNum();
+        int startUvRow = startRow + 1;
 
 
         int colStepNumber = 10; // номер ступени
         int colUvList = 11;     // список УВ
 
-        if(startUvRow!=endUvRow) tableUv(sheet, startUvRow, endUvRow, colStepNumber, colUvList, currentTable);
+        if(startRow!=endUvRow) tableUv(sheet, startUvRow, endUvRow, colStepNumber, colUvList, currentTable);
 
         // добавляем итоговую строку
         tableStrings.add(currentTable);

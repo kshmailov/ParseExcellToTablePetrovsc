@@ -13,7 +13,7 @@ public class App
         String input2 = "data/2.xlsx";
         ParseExcellTable parseExcellTable1 = new ParseExcellTable();
         List<StringTable> stringTables = new ArrayList<>(parseExcellTable1.parseExcell(input1, false));
-        int id = stringTables.getLast().getId();
+        int id = stringTables.getLast().getId()+1;
         parseExcellTable1 = new ParseExcellTable(id);
         stringTables.addAll(parseExcellTable1.parseExcell(input2,true));
 
